@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+    environment:
+      - REACT_APP_SOCKET_URL=http://localhost:5000
+    networks:
+      - qr-restaurant-network
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongodb
+    environment:
+      - PORT=5000
+      - MONGODB_URI=mongodb://mongodb:27017/qr-restaurant
+      - JWT_SECRET=your-secret-key
+      - CORS_ORIGIN=http://localhost:3000
+    networks:
+      - qr-restaurant-network
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - qr-restaurant-network
+
+networks:
+  qr-restaurant-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
