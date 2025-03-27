@@ -31,6 +31,8 @@ import {
 import { AddIcon, EditIcon, DeleteIcon } from '@chakra-ui/icons';
 import axios from 'axios';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+
 interface MenuItem {
   _id: string;
   name: string;
@@ -73,12 +75,21 @@ const AdminDashboard: React.FC = () => {
 
   const fetchMenuItems = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/menu');
+      const response = await axios.get(`${API_URL}/api/menu`);
       setMenuItems(response.data);
-      const uniqueCategories = Array.from(
+      
+      // Get categories from menu items
+      const menuCategories = Array.from(
         new Set(response.data.map((item: MenuItem) => item.category))
       ) as string[];
-      setCategories(uniqueCategories);
+      
+      // Get categories from localStorage
+      const savedCategories = JSON.parse(localStorage.getItem('categories') || '[]') as string[];
+      
+      // Combine both sets of categories and remove duplicates
+      const allCategories = Array.from(new Set([...menuCategories, ...savedCategories])).sort();
+      
+      setCategories(allCategories);
     } catch (error) {
       toast({
         title: 'Error',
@@ -92,14 +103,72 @@ const AdminDashboard: React.FC = () => {
 
   const handleSubmit = async () => {
     try {
-      const itemData = {
-        ...formData,
+      let finalCategory = formData.category;
+      
+      // If a new category is being added
+      if (formData.category === 'new' && newCategory.trim()) {
+        finalCategory = newCategory.trim();
+        
+        // Add new category to localStorage
+        const savedCategories = JSON.parse(localStorage.getItem('categories') || '[]') as string[];
+        if (!savedCategories.includes(finalCategory)) {
+          savedCategories.push(finalCategory);
+          localStorage.setItem('categories', JSON.stringify(savedCategories));
+        }
+      }
+
+      // Validate required fields
+      if (!formData.name.trim() || !formData.description.trim() || !formData.price || !finalCategory) {
+        toast({
+          title: 'Error',
+          description: 'Please fill in all required fields',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+        return;
+      }
+
+      // Format the data according to server requirements
+      interface MenuItemData {
+        name: string;
+        description: string;
+        price: number;
+        category: string;
+        image?: string;
+        available: boolean;
+        options?: {
+          name: string;
+          choices: string[];
+        }[];
+      }
+
+      const itemData: MenuItemData = {
+        name: formData.name.trim(),
+        description: formData.description.trim(),
         price: parseFloat(formData.price),
-        options: formData.options.filter(opt => opt.name && opt.choices[0]),
+        category: finalCategory,
+        available: true,
+        options: formData.options
+          .filter(opt => opt.name.trim() && opt.choices.length > 0 && opt.choices.some(choice => choice.trim()))
+          .map(opt => ({
+            name: opt.name.trim(),
+            choices: opt.choices.filter(choice => choice.trim())
+          }))
       };
 
+      // Only include image if it's provided
+      if (formData.image.trim()) {
+        itemData.image = formData.image.trim();
+      }
+
+      // Only include options if there are valid ones
+      if (!itemData.options || itemData.options.length === 0) {
+        delete itemData.options;
+      }
+
       if (editingItem) {
-        await axios.put(`http://localhost:5000/api/menu/${editingItem._id}`, itemData);
+        await axios.put(`${API_URL}/api/menu/${editingItem._id}`, itemData);
         toast({
           title: 'Success',
           description: 'Menu item updated successfully',
@@ -108,7 +177,7 @@ const AdminDashboard: React.FC = () => {
           isClosable: true,
         });
       } else {
-        await axios.post('http://localhost:5000/api/menu', itemData);
+        await axios.post(`${API_URL}/api/menu`, itemData);
         toast({
           title: 'Success',
           description: 'Menu item added successfully',
@@ -121,7 +190,9 @@ const AdminDashboard: React.FC = () => {
       fetchMenuItems();
       onClose();
       resetForm();
+      setNewCategory('');
     } catch (error) {
+      console.error('Error saving menu item:', error);
       toast({
         title: 'Error',
         description: 'Failed to save menu item',
@@ -148,7 +219,7 @@ const AdminDashboard: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this item?')) {
       try {
-        await axios.delete(`http://localhost:5000/api/menu/${id}`);
+        await axios.delete(`${API_URL}/api/menu/${id}`);
         toast({
           title: 'Success',
           description: 'Menu item deleted successfully',

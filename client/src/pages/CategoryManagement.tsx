@@ -29,6 +29,8 @@ import {
 import { AddIcon, EditIcon, DeleteIcon } from '@chakra-ui/icons';
 import axios from 'axios';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+
 interface MenuItem {
   _id: string;
   name: string;
@@ -54,7 +56,7 @@ const CategoryManagement: React.FC = () => {
 
   const fetchCategories = async () => {
     try {
-      const menuResponse = await axios.get<MenuItem[]>('http://localhost:5000/api/menu');
+      const menuResponse = await axios.get<MenuItem[]>(`${API_URL}/api/menu`);
       const menuItems = menuResponse.data;
       
       // Get existing categories from localStorage or initialize empty array
@@ -111,7 +113,7 @@ const CategoryManagement: React.FC = () => {
 
       if (editingCategory) {
         // Update all menu items with old category name to new category name
-        const response = await axios.put(`http://localhost:5000/api/menu/category/${editingCategory.name}`, {
+        const response = await axios.put(`${API_URL}/api/menu/category/${editingCategory.name}`, {
           newCategory: categoryName,
         });
 
@@ -174,7 +176,7 @@ const CategoryManagement: React.FC = () => {
 
     if (window.confirm(`Are you sure you want to delete "${category.name}"?`)) {
       try {
-        await axios.delete(`http://localhost:5000/api/menu/category/${encodeURIComponent(category.name)}`);
+        await axios.delete(`${API_URL}/api/menu/category/${encodeURIComponent(category.name)}`);
         
         // Remove category from localStorage
         const savedCategories = JSON.parse(localStorage.getItem('categories') || '[]') as string[];

@@ -26,6 +26,8 @@ import { ArrowBackIcon } from '@chakra-ui/icons';
 import axios, { AxiosError } from 'axios';
 import { useAuth } from '../context/AuthContext';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+
 interface MenuItem {
   _id: string;
   name: string;
@@ -55,6 +57,7 @@ const KitchenDisplay: React.FC = () => {
   const { socket } = useSocket();
   const toast = useToast();
   const { login } = useAuth();
+  const [selectedStatus, setSelectedStatus] = useState('all');
 
   // Sound notification function
   const playSound = (type: 'new-order' | 'completed' | 'special-request') => {
@@ -117,7 +120,7 @@ const KitchenDisplay: React.FC = () => {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const response = await axios.get<Order[]>('http://localhost:5000/api/orders');
+      const response = await axios.get<Order[]>(`${API_URL}/api/orders`);
       // Filter out any orders with invalid menuItems
       const validOrders = response.data.map((order: Order) => ({
         ...order,
@@ -181,7 +184,7 @@ const KitchenDisplay: React.FC = () => {
 
   const handleStatusUpdate = async (orderId: string, newStatus: string) => {
     try {
-      await axios.put(`http://localhost:5000/api/orders/${orderId}/status`, {
+      await axios.put(`${API_URL}/api/orders/${orderId}/status`, {
         status: newStatus,
       });
 
@@ -241,7 +244,7 @@ const KitchenDisplay: React.FC = () => {
           <HStack align="center" spacing={8}>
             <Heading size="lg">Kitchen Orders</Heading>
             <Spacer />
-            <VStack align="flex-end" spacing={1}>
+            <VStack align="center" spacing={1}>
               <Text fontSize="lg" fontWeight="semibold">
                 {formatDate(currentTime)}
               </Text>
@@ -249,6 +252,12 @@ const KitchenDisplay: React.FC = () => {
                 {formatTime(currentTime)}
               </Text>
             </VStack>
+            <Spacer />
+            <Link to="/admin/menu">
+              <Button colorScheme="blue">
+                Admin Dashboard
+              </Button>
+            </Link>
           </HStack>
         </Box>
 

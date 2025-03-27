@@ -59,6 +59,25 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item }) => {
   const mutedColor = useColorModeValue('gray.600', 'gray.400');
 
   const handleAddToCart = () => {
+    // Check if all required options are selected
+    if (item.options && item.options.length > 0) {
+      const missingOptions = item.options.filter(
+        option => !selectedOptions[option.name]
+      );
+
+      if (missingOptions.length > 0) {
+        toast({
+          title: 'Required Options',
+          description: `Please select ${missingOptions.map(opt => opt.name).join(', ')}`,
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+          position: 'top',
+        });
+        return;
+      }
+    }
+
     dispatch({
       type: 'ADD_ITEM',
       payload: {

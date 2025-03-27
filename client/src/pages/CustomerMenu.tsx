@@ -62,6 +62,8 @@ const MEAL_TYPES = [
   { id: 'Takeout', label: 'Takeaway', description: 'Ready in 20 mins' },
 ];
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+
 const CustomerMenu: React.FC = () => {
   const { tableId } = useParams<{ tableId: string }>();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -81,7 +83,7 @@ const CustomerMenu: React.FC = () => {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/orders');
+        const response = await axios.get(`${API_URL}/api/orders`);
         const tableOrders = response.data.filter(
           (order: Order) => 
             order.tableNumber === parseInt(tableId || '0') && 
@@ -154,7 +156,7 @@ const CustomerMenu: React.FC = () => {
   useEffect(() => {
     const fetchMenu = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/menu');
+        const response = await axios.get(`${API_URL}/api/menu`);
         setMenuItems(response.data);
         
         // Extract unique categories and sort them

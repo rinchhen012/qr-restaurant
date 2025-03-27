@@ -26,6 +26,8 @@ interface CartDrawerProps {
   tableId: string;
 }
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+
 // Add a utility function for price formatting
 const formatPrice = (price: number) => {
   return `¥${price.toLocaleString()}`;
@@ -67,7 +69,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose, tableId }) => 
         totalAmount: state.total,
       };
 
-      const response = await axios.post('http://localhost:5000/api/orders', order);
+      const response = await axios.post(`${API_URL}/api/orders`, order);
 
       if (socket) {
         socket.emit('new-order', response.data);
