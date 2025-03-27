@@ -25,6 +25,7 @@ import {
   DrawerCloseButton,
   DrawerHeader,
   DrawerBody,
+  Grid,
 } from '@chakra-ui/react';
 import { HamburgerIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, ChevronUpIcon } from '@chakra-ui/icons';
 import { useSocket } from '../context/SocketContext';
@@ -540,7 +541,7 @@ const CustomerMenu: React.FC = () => {
           bg={bgColor}
           borderBottom="1px"
           borderColor={borderColor}
-          zIndex={10}
+          zIndex={15}
           px={4}
           py={3}
         >
@@ -557,8 +558,6 @@ const CustomerMenu: React.FC = () => {
               leftIcon={<HamburgerIcon />}
               height="50px"
               fontSize="lg"
-              position="relative"
-              zIndex={11}
             >
               Order History
             </Button>
@@ -568,7 +567,7 @@ const CustomerMenu: React.FC = () => {
         {/* Category Tabs */}
         <Box
           position="fixed"
-          top={activeOrders.length > 0 ? (isOrdersOpen ? "180px" : "100px") : "65px"}
+          top={activeOrders.length > 0 ? (isOrdersOpen ? "240px" : "160px") : "125px"}
           left={0}
           right={0}
           bg={bgColor}
@@ -633,65 +632,73 @@ const CustomerMenu: React.FC = () => {
           </Flex>
         </Box>
 
-        {/* Category Description */}
-        <Box pt="130px" px={4} pb={4}>
-          <Text fontSize="2xl" fontWeight="bold">
-            {selectedCategoryInfo?.label}
-          </Text>
-          <Text color={mutedColor} fontSize="sm">
-            {selectedCategoryInfo?.description}
-          </Text>
-        </Box>
-
-        {/* Menu Items Stack */}
-        <Box px={4}>
-          {filteredItems.length > 0 ? (
-            filteredItems.map((item) => (
-              <Box key={item._id}>
-                <MenuItemCard item={item} />
-                <Divider />
-              </Box>
-            ))
-          ) : (
-            <Center py={10}>
-              <Text color={mutedColor}>No items available in this category</Text>
-            </Center>
-          )}
-        </Box>
-
-        {/* Fixed Bottom Bar */}
-        <Box
-          position="fixed"
-          bottom={0}
-          left={0}
-          right={0}
-          bg={bgColor}
-          borderTop="1px"
-          borderColor={borderColor}
-          py={3}
-          px={4}
-          zIndex={10}
-        >
-          <HStack justify="space-between" align="center">
-            <Stack spacing={0}>
-              <Text fontSize="xs" color={mutedColor}>
-                {state.items.length} {state.items.length === 1 ? 'item' : 'items'} in cart
+        {/* Adjust main content padding based on whether orders section is shown */}
+        <Box pt={activeOrders.length > 0 ? (isOrdersOpen ? "280px" : "200px") : "165px"}>
+          {/* Category Description */}
+          <Box px={4}>
+            {selectedCategoryInfo && (
+              <Text color={mutedColor} fontSize="sm" mb={0}>
+                {selectedCategoryInfo.description}
               </Text>
-              <Text fontSize="lg" fontWeight="bold">
-                {formatPrice(state.total)}
-              </Text>
-            </Stack>
-            <Button
-              colorScheme="blue"
-              size="lg"
-              onClick={cartDisclosure.onOpen}
-              leftIcon={<HamburgerIcon />}
-              height="50px"
-              px={8}
+            )}
+          </Box>
+
+          {/* Menu Items Grid */}
+          <Box px={4}>
+            <Grid
+              templateColumns="repeat(auto-fill, minmax(300px, 1fr))"
+              gap={6}
+              mt={0}
             >
-              View Cart
-            </Button>
-          </HStack>
+              {filteredItems.length > 0 ? (
+                filteredItems.map((item) => (
+                  <Box key={item._id}>
+                    <MenuItemCard item={item} />
+                    <Divider />
+                  </Box>
+                ))
+              ) : (
+                <Center py={10}>
+                  <Text color={mutedColor}>No items available in this category</Text>
+                </Center>
+              )}
+            </Grid>
+          </Box>
+
+          {/* Fixed Bottom Bar */}
+          <Box
+            position="fixed"
+            bottom={0}
+            left={0}
+            right={0}
+            bg={bgColor}
+            borderTop="1px"
+            borderColor={borderColor}
+            py={3}
+            px={4}
+            zIndex={10}
+          >
+            <HStack justify="space-between" align="center">
+              <Stack spacing={0}>
+                <Text fontSize="xs" color={mutedColor}>
+                  {state.items.length} {state.items.length === 1 ? 'item' : 'items'} in cart
+                </Text>
+                <Text fontSize="lg" fontWeight="bold">
+                  {formatPrice(state.total)}
+                </Text>
+              </Stack>
+              <Button
+                colorScheme="blue"
+                size="lg"
+                onClick={cartDisclosure.onOpen}
+                leftIcon={<HamburgerIcon />}
+                height="50px"
+                px={8}
+              >
+                View Cart
+              </Button>
+            </HStack>
+          </Box>
         </Box>
       </Box>
 
