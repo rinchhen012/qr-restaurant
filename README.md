@@ -50,7 +50,7 @@ A modern restaurant ordering system that allows customers to scan QR codes at th
 1. Clone the repository:
 
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/rinchhen012/qr-restaurant.git
    cd qr-restaurant
    ```
 
