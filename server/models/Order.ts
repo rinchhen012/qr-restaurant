@@ -1,41 +1,49 @@
-import mongoose from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 
-const orderSchema = new mongoose.Schema({
-  tableNumber: {
-    type: Number,
-    required: true,
-  },
+export interface IOrder extends Document {
+  tableNumber: number;
+  items: {
+    menuItem: mongoose.Types.ObjectId;
+    quantity: number;
+    selectedOptions: Record<string, string>;
+    specialInstructions?: string;
+  }[];
+  status: 'pending' | 'in-progress' | 'completed' | 'cancelled';
+  totalAmount: number;
+  paymentStatus: 'pending' | 'paid' | 'cancelled';
+  specialRequests: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const orderSchema = new Schema<IOrder>({
+  tableNumber: { type: Number, required: true },
   items: [{
-    menuItem: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'MenuItem',
-      required: true,
-    },
-    quantity: {
-      type: Number,
-      required: true,
-      min: 1,
-    },
-    selectedOptions: {
-      type: Map,
-      of: String,
-    },
-    specialInstructions: String,
+    menuItem: { type: Schema.Types.ObjectId, ref: 'MenuItem', required: true },
+    quantity: { type: Number, required: true },
+    selectedOptions: { type: Map, of: String, required: true },
+    specialInstructions: String
   }],
   status: {
     type: String,
     enum: ['pending', 'in-progress', 'completed', 'cancelled'],
-    default: 'pending',
+    default: 'pending'
   },
-  specialRequests: [{
+  totalAmount: { type: Number, required: true },
+  paymentStatus: {
     type: String,
-  }],
-  totalAmount: {
-    type: Number,
-    required: true,
+    enum: ['pending', 'paid', 'cancelled'],
+    default: 'pending'
   },
-}, {
-  timestamps: true,
+  specialRequests: [String],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
 
-export const Order = mongoose.model('Order', orderSchema); 
+// Update the updatedAt timestamp before saving
+orderSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
+
+export const Order = mongoose.model<IOrder>('Order', orderSchema); 

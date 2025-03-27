@@ -3,8 +3,8 @@ version: "3.8"
 services:
   client:
     build:
-      context: ./client
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.client
     ports:
       - "3000:80"
     depends_on:
@@ -16,17 +16,14 @@ services:
 
   server:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.server
     ports:
       - "5001:5001"
     depends_on:
       - mongodb
-    environment:
-      - PORT=5001
-      - MONGODB_URI=mongodb://mongodb:27017/qr-restaurant
-      - JWT_SECRET=your-secret-key
-      - CORS_ORIGIN=http://localhost:3000
+    env_file:
+      - .env
     networks:
       - qr-restaurant-network
 

@@ -1,57 +1,14 @@
 import React from 'react';
-import { 
-  BrowserRouter as Router, 
-  Routes, 
-  Route, 
-  Navigate,
-  Link,
-  useLocation,
-  useNavigate,
-} from 'react-router-dom';
-import { AppProvider } from './providers/AppProvider';
-import { AuthProvider } from './context/AuthContext';
-import CustomerMenu from './pages/CustomerMenu';
-import KitchenDisplay from './pages/KitchenDisplay';
-import AdminDashboard from './pages/AdminDashboard';
-import CategoryManagement from './pages/CategoryManagement';
-import Login from './pages/Login';
-import ProtectedRoute from './components/ProtectedRoute';
-import { 
-  Box, 
-  Container, 
-  Flex, 
-  Button, 
-  Heading, 
-  HStack, 
-  useToast,
-  AlertDialog,
-  AlertDialogBody,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogContent,
-  AlertDialogOverlay,
-  useDisclosure,
-} from '@chakra-ui/react';
-import { useAuth } from './context/AuthContext';
+import { Box, Container, Flex, Button, Heading, HStack, useToast, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, useDisclosure } from '@chakra-ui/react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { ExternalLinkIcon, TimeIcon } from '@chakra-ui/icons';
-import TableManagement from './pages/TableManagement';
 
-// Configure future flags
-const router = {
-  future: {
-    v7_startTransition: true,
-  },
-};
+interface AdminLayoutProps {
+  children: React.ReactNode;
+}
 
-const KitchenLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return (
-    <Box>
-      {children}
-    </Box>
-  );
-};
-
-const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -84,8 +41,9 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 variant={location.pathname === '/admin/tables' ? 'solid' : 'ghost'}
                 colorScheme="green"
                 leftIcon={<TimeIcon />}
+                size="md"
               >
-                Tables
+                Manage Tables
               </Button>
               <Button
                 as={Link}
@@ -169,60 +127,4 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
-const App: React.FC = () => {
-  return (
-    <AppProvider>
-      <Router future={router.future}>
-        <AuthProvider>
-          <Routes>
-            <Route path="/table/:tableId" element={<CustomerMenu />} />
-            <Route
-              path="/kitchen"
-              element={
-                <ProtectedRoute>
-                  <KitchenLayout>
-                    <KitchenDisplay />
-                  </KitchenLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/admin/login" element={<Login />} />
-            <Route
-              path="/admin/menu"
-              element={
-                <ProtectedRoute>
-                  <AdminLayout>
-                    <AdminDashboard />
-                  </AdminLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/categories"
-              element={
-                <ProtectedRoute>
-                  <AdminLayout>
-                    <CategoryManagement />
-                  </AdminLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/tables"
-              element={
-                <ProtectedRoute>
-                  <AdminLayout>
-                    <TableManagement />
-                  </AdminLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/" element={<Navigate to="/table/1" replace />} />
-          </Routes>
-        </AuthProvider>
-      </Router>
-    </AppProvider>
-  );
-};
-
-export default App;
+export default AdminLayout; 

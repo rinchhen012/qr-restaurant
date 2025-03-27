@@ -31,4 +31,13 @@ export const specialRequestSchema = z.object({
   body: z.object({
     request: z.string().min(1, 'Request is required'),
   }),
+});
+
+export const paymentStatusSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'Order ID is required'),
+  }),
+  body: z.object({
+    paymentStatus: z.enum(['pending', 'paid', 'cancelled']),
+  }),
 }); 

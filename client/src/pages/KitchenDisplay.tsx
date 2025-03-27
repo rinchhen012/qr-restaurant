@@ -22,7 +22,7 @@ import {
 } from '@chakra-ui/react';
 import { useSocket } from '../context/SocketContext';
 import { Link } from 'react-router-dom';
-import { ArrowBackIcon } from '@chakra-ui/icons';
+import { ArrowBackIcon, TimeIcon } from '@chakra-ui/icons';
 import axios, { AxiosError } from 'axios';
 import { useAuth } from '../context/AuthContext';
 
@@ -253,11 +253,18 @@ const KitchenDisplay: React.FC = () => {
               </Text>
             </VStack>
             <Spacer />
-            <Link to="/admin/menu">
-              <Button colorScheme="blue">
-                Admin Dashboard
-              </Button>
-            </Link>
+            <HStack spacing={4}>
+              <Link to="/admin/tables">
+                <Button colorScheme="green" leftIcon={<TimeIcon />}>
+                  Tables
+                </Button>
+              </Link>
+              <Link to="/admin/menu">
+                <Button colorScheme="blue">
+                  Admin
+                </Button>
+              </Link>
+            </HStack>
           </HStack>
         </Box>
 

@@ -84,4 +84,36 @@ export const getOrdersByStatus = async (req: Request, res: Response) => {
   } catch (error) {
     res.status(500).json({ message: 'Error fetching orders by status', error });
   }
+};
+
+export const updatePaymentStatus = async (req: Request, res: Response) => {
+  try {
+    const { paymentStatus } = req.body;
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      { paymentStatus },
+      { new: true }
+    ).populate('items.menuItem');
+    
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    res.json(order);
+  } catch (error) {
+    res.status(400).json({ message: 'Error updating payment status', error });
+  }
+};
+
+export const getOrderById = async (req: Request, res: Response) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate('items.menuItem');
+    
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching order', error });
+  }
 }; 

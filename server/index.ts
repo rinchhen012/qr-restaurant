@@ -9,6 +9,7 @@ import menuRoutes from './routes/menuRoutes';
 import orderRoutes from './routes/orderRoutes';
 import authRoutes from './routes/authRoutes';
 import { authenticateToken } from './middleware/auth';
+import tableRoutes from './routes/tableRoutes';
 
 dotenv.config();
 
@@ -45,8 +46,9 @@ app.get('/health', (req, res) => {
 
 // Public routes
 app.use('/api/auth', authRoutes);
-app.use('/api/menu', menuRoutes); // All menu routes are handled by the router
-app.use('/api/orders', orderRoutes); // Keep orders public for customers
+app.use('/api/menu', menuRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/tables', tableRoutes);
 
 // Protected admin routes
 app.use('/api/menu', authenticateToken, menuRoutes); // Protect POST, PUT, DELETE
