@@ -8,8 +8,9 @@ import dotenv from 'dotenv';
 import menuRoutes from './routes/menuRoutes';
 import orderRoutes from './routes/orderRoutes';
 import authRoutes from './routes/authRoutes';
-import { authenticateToken } from './middleware/auth';
 import tableRoutes from './routes/tableRoutes';
+import floorPlanRoutes from './routes/floorPlanRoutes';
+import { authenticateToken } from './middleware/auth';
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/tables', tableRoutes);
+app.use('/api/floorplans', floorPlanRoutes);
 
 // Protected admin routes
 app.use('/api/menu', authenticateToken, menuRoutes); // Protect POST, PUT, DELETE

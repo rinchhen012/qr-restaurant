@@ -1,5 +1,10 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export interface Position {
+  x: number;
+  y: number;
+}
+
 export interface ITable extends Document {
   tableNumber: number;
   isActive: boolean;
@@ -8,7 +13,14 @@ export interface ITable extends Document {
   lastDeactivatedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  position: Position;
+  shape: 'square' | 'round' | 'rectangle';
 }
+
+const positionSchema = new Schema<Position>({
+  x: { type: Number, default: 50 },
+  y: { type: Number, default: 50 }
+}, { _id: false });
 
 const tableSchema = new Schema<ITable>({
   tableNumber: { type: Number, required: true, unique: true },
@@ -16,6 +28,8 @@ const tableSchema = new Schema<ITable>({
   currentOrderId: { type: Schema.Types.ObjectId, ref: 'Order' },
   lastActivatedAt: Date,
   lastDeactivatedAt: Date,
+  position: { type: positionSchema, default: { x: 50, y: 50 } },
+  shape: { type: String, enum: ['square', 'round', 'rectangle'], default: 'square' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

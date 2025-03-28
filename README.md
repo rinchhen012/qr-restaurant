@@ -1,6 +1,6 @@
 # QR Restaurant Ordering System
 
-A modern restaurant ordering system that allows customers to scan QR codes at their tables to view the menu, place orders, and make special requests. The system includes a kitchen display system for order management.
+A modern restaurant ordering system that allows customers to scan QR codes at their tables to view the menu, place orders, and make special requests. The system includes a kitchen display system for order management and a comprehensive table management interface.
 
 ## Features
 
@@ -8,26 +8,37 @@ A modern restaurant ordering system that allows customers to scan QR codes at th
 
 - Scan QR code to access digital menu
 - Browse menu items by category
+- Select item options and quantities
 - Place orders directly from the table
-- Real-time order status updates
-- Special requests (water/service)
-- Cart management
-- Order history
+- Request water or staff assistance
+- View order status in real-time
+- View order history
 
 ### Kitchen Display System
 
 - Real-time order notifications
-- Order status management
-- Special request notifications
-- Active and completed orders view
+- Order status management (pending, in-progress, completed)
+- Special request alerts
+- Order queue management
 - Sound alerts for new orders
+
+### Table Management System
+
+- Interactive drag-and-drop floor plan editor
+- Visual table status indicators (active/inactive, paid/unpaid)
+- Real-time table timers showing duration of customer occupancy
+- Order information displayed directly on table cards
+- Grid snapping and alignment guides for easy layout design
+- Multiple table shapes (square, round, rectangle)
+- Payment status tracking and management
+- Table activation/deactivation with safety checks
 
 ### Admin Dashboard
 
-- Menu item management
+- Menu item management (add, edit, delete)
 - Category management
-- Order tracking
-- Staff management
+- Price and availability updates
+- Order history and tracking
 
 ## Tech Stack
 
@@ -50,7 +61,7 @@ A modern restaurant ordering system that allows customers to scan QR codes at th
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/rinchhen012/qr-restaurant.git
+   git clone https://github.com/yourusername/qr-restaurant.git
    cd qr-restaurant
    ```
 
@@ -63,6 +74,7 @@ A modern restaurant ordering system that allows customers to scan QR codes at th
 3. Access the applications:
    - Customer Menu: http://localhost:3000/table/1
    - Kitchen Display: http://localhost:3000/kitchen
+   - Table Management: http://localhost:3000/tables
    - Admin Dashboard: http://localhost:3000/admin/menu
 
 ### Local Development
@@ -102,14 +114,22 @@ A modern restaurant ordering system that allows customers to scan QR codes at th
 qr-restaurant/
 ├── client/                 # React frontend
 │   ├── src/
+│   │   ├── components/     # Reusable UI components
+│   │   ├── pages/          # Page components
+│   │   │   ├── TableManagement.tsx  # Table floor plan editor
+│   │   │   ├── Kitchen.tsx          # Kitchen display system
+│   │   │   ├── Menu.tsx             # Customer menu interface
+│   │   │   └── Admin.tsx            # Admin dashboard
+│   │   ├── utils/          # Utility functions
+│   │   └── context/        # React context providers
 │   ├── public/
 │   ├── Dockerfile
 │   └── nginx.conf
 ├── server/                 # Node.js backend
-│   ├── src/
-│   ├── controllers/
-│   ├── models/
-│   ├── routes/
+│   ├── controllers/        # Request handlers
+│   ├── models/             # Database models (Table, Order, MenuItem, etc.)
+│   ├── routes/             # API routes
+│   ├── schemas/            # Validation schemas
 │   └── Dockerfile
 └── docker-compose.yml      # Docker composition
 ```
@@ -129,9 +149,17 @@ qr-restaurant/
    - Squash commits before merging
 
 3. **Testing**
-   - Write unit tests for new features
-   - Ensure all tests pass before committing
    - Test across different devices and browsers
+   - Validate UI/UX on both desktop and mobile views
+
+## Recent Updates
+
+- **Enhanced Table Management**: Added comprehensive floor plan editor with drag-and-drop functionality
+- **Table Timers**: Implemented active time tracking for tables to monitor customer duration
+- **Payment Tracking**: Added visual indicators for order payment status
+- **Improved UX**: Added alignment guides, grid snapping, and visual cues for better usability
+- **Visual Indicators**: Tables now display real-time information about current orders and status
+- **Mobile Optimization**: Improved layout for tablet devices used by staff
 
 ## Deployment
 

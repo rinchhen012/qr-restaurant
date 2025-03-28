@@ -544,8 +544,9 @@ const CustomerMenu: React.FC = () => {
           zIndex={15}
           px={4}
           py={3}
+          height="65px"
         >
-          <HStack justify="space-between" align="center">
+          <HStack justify="space-between" align="center" height="100%">
             <Box>
               <Text fontWeight="bold" fontSize="lg">Table {tableId}</Text>
               <Text fontSize="xs" color={mutedColor}>Scan QR to order</Text>
@@ -567,7 +568,7 @@ const CustomerMenu: React.FC = () => {
         {/* Category Tabs */}
         <Box
           position="fixed"
-          top={activeOrders.length > 0 ? (isOrdersOpen ? "240px" : "160px") : "125px"}
+          top={activeOrders.length > 0 ? (isOrdersOpen ? "195px" : "115px") : "65px"}
           left={0}
           right={0}
           bg={bgColor}
@@ -633,7 +634,7 @@ const CustomerMenu: React.FC = () => {
         </Box>
 
         {/* Adjust main content padding based on whether orders section is shown */}
-        <Box pt={activeOrders.length > 0 ? (isOrdersOpen ? "280px" : "200px") : "165px"}>
+        <Box pt={activeOrders.length > 0 ? (isOrdersOpen ? "280px" : "200px") : "140px"}>
           {/* Category Description */}
           <Box px={4}>
             {selectedCategoryInfo && (

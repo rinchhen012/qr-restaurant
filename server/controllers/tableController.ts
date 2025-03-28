@@ -12,6 +12,132 @@ export const getAllTables = async (req: Request, res: Response) => {
   }
 };
 
+export const getTableById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const table = await Table.findById(id);
+    
+    if (!table) {
+      return res.status(404).json({ message: 'Table not found' });
+    }
+    
+    res.json(table);
+  } catch (error) {
+    console.error('Error fetching table:', error);
+    res.status(500).json({ message: 'Error fetching table', error });
+  }
+};
+
+export const createTable = async (req: Request, res: Response) => {
+  try {
+    const { tableNumber, isActive, position, shape } = req.body;
+    
+    // Check if table with this number already exists
+    const existingTable = await Table.findOne({ tableNumber });
+    if (existingTable) {
+      return res.status(400).json({ message: 'Table with this number already exists' });
+    }
+    
+    const newTable = await Table.create({
+      tableNumber,
+      isActive: isActive || false,
+      position: position || { x: 50, y: 50 },
+      shape: shape || 'square',
+      lastActivatedAt: isActive ? new Date() : undefined
+    });
+    
+    res.status(201).json(newTable);
+  } catch (error) {
+    console.error('Error creating table:', error);
+    res.status(500).json({ message: 'Error creating table', error });
+  }
+};
+
+export const updateTable = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { shape, tableNumber } = req.body;
+    
+    const table = await Table.findById(id);
+    if (!table) {
+      return res.status(404).json({ message: 'Table not found' });
+    }
+    
+    // If table number is being changed, check for uniqueness
+    if (tableNumber && tableNumber !== table.tableNumber) {
+      const existingTable = await Table.findOne({ tableNumber });
+      if (existingTable) {
+        return res.status(400).json({ message: 'Table with this number already exists' });
+      }
+      table.tableNumber = tableNumber;
+    }
+    
+    if (shape) table.shape = shape;
+    
+    await table.save();
+    
+    res.json(table);
+  } catch (error) {
+    console.error('Error updating table:', error);
+    res.status(500).json({ message: 'Error updating table', error });
+  }
+};
+
+export const updateTablePosition = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { position } = req.body;
+    
+    if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
+      return res.status(400).json({ message: 'Valid position with x and y coordinates is required' });
+    }
+    
+    const table = await Table.findByIdAndUpdate(
+      id,
+      { position },
+      { new: true }
+    );
+    
+    if (!table) {
+      return res.status(404).json({ message: 'Table not found' });
+    }
+    
+    res.json(table);
+  } catch (error) {
+    console.error('Error updating table position:', error);
+    res.status(500).json({ message: 'Error updating table position', error });
+  }
+};
+
+export const deleteTable = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Check for active orders
+    const table = await Table.findById(id);
+    if (!table) {
+      return res.status(404).json({ message: 'Table not found' });
+    }
+    
+    const activeOrder = await Order.findOne({
+      tableNumber: table.tableNumber,
+      paymentStatus: 'pending'
+    });
+    
+    if (activeOrder) {
+      return res.status(400).json({ 
+        message: 'Cannot delete table with active orders. Please complete or cancel the orders first.' 
+      });
+    }
+    
+    await Table.findByIdAndDelete(id);
+    res.json({ message: 'Table deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting table:', error);
+    res.status(500).json({ message: 'Error deleting table', error });
+  }
+};
+
 export const activateTable = async (req: Request, res: Response) => {
   try {
     const { tableNumber } = req.params;
