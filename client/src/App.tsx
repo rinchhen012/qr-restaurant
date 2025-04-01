@@ -15,6 +15,7 @@ import KitchenDisplay from './pages/KitchenDisplay';
 import AdminDashboard from './pages/AdminDashboard';
 import CategoryManagement from './pages/CategoryManagement';
 import Login from './pages/Login';
+import Sales from './pages/Sales';
 import ProtectedRoute from './components/ProtectedRoute';
 import { 
   Box, 
@@ -102,6 +103,14 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 colorScheme="blue"
               >
                 Categories
+              </Button>
+              <Button
+                as={Link}
+                to="/admin/sales"
+                variant={location.pathname === '/admin/sales' ? 'solid' : 'ghost'}
+                colorScheme="purple"
+              >
+                Sales
               </Button>
               <Button
                 as={Link}
@@ -213,6 +222,16 @@ const App: React.FC = () => {
                 <ProtectedRoute>
                   <AdminLayout>
                     <TableManagement />
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/sales"
+              element={
+                <ProtectedRoute>
+                  <AdminLayout>
+                    <Sales />
                   </AdminLayout>
                 </ProtectedRoute>
               }

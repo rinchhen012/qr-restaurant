@@ -26,8 +26,20 @@ import {
   DrawerHeader,
   DrawerBody,
   Grid,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogOverlay,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
 } from '@chakra-ui/react';
-import { HamburgerIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, ChevronUpIcon } from '@chakra-ui/icons';
+import { HamburgerIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, ChevronUpIcon, AtSignIcon } from '@chakra-ui/icons';
 import { useSocket } from '../context/SocketContext';
 import { useCart } from '../context/CartContext';
 import MenuItemCard from '../components/MenuItemCard';
@@ -97,6 +109,9 @@ const CustomerMenu: React.FC = () => {
   const mutedColor = useColorModeValue('gray.600', 'gray.400');
   const tabsRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [showThankYouScreen, setShowThankYouScreen] = useState(false);
+  const paymentCancelRef = useRef<HTMLButtonElement>(null);
 
   // Add user interaction handler
   useEffect(() => {
@@ -379,6 +394,32 @@ const CustomerMenu: React.FC = () => {
     }
   };
 
+  // Handler for pay button click
+  const handlePayButtonClick = () => {
+    setIsPaymentDialogOpen(true);
+  };
+
+  // Handler for payment confirmation
+  const handlePaymentConfirmed = () => {
+    setIsPaymentDialogOpen(false);
+    
+    // Emit socket event to notify kitchen
+    if (socket) {
+      socket.emit('request-payment-at-register', {
+        tableNumber: parseInt(tableId || '0'),
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Show thank you screen
+    setShowThankYouScreen(true);
+    
+    // Hide thank you screen after 10 seconds
+    setTimeout(() => {
+      setShowThankYouScreen(false);
+    }, 10000);
+  };
+
   if (!isTableActive) {
     return (
       <Center height="100vh">
@@ -403,7 +444,7 @@ const CustomerMenu: React.FC = () => {
           zIndex="20"
           borderBottom="1px"
           borderColor={borderColor}
-          px={4}
+          px={2}
           py={2}
         >
           <HStack justify="space-between" onClick={() => setIsOrdersOpen(!isOrdersOpen)} cursor="pointer">
@@ -530,6 +571,67 @@ const CustomerMenu: React.FC = () => {
         </DrawerContent>
       </Drawer>
 
+      {/* Payment Confirmation Dialog */}
+      <AlertDialog
+        isOpen={isPaymentDialogOpen}
+        leastDestructiveRef={paymentCancelRef}
+        onClose={() => setIsPaymentDialogOpen(false)}
+        motionPreset="slideInBottom"
+        isCentered={false}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent
+            mx="auto"
+            mt="30vh"
+            maxW="90%"
+            w={{ base: "90%", md: "400px" }}
+          >
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              Pay at Register
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              Are you ready to pay at the register? Staff will be notified to assist you.
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button ref={paymentCancelRef} onClick={() => setIsPaymentDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button colorScheme="green" onClick={handlePaymentConfirmed} ml={3}>
+                Confirm
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
+
+      {/* Thank You Modal */}
+      <Modal 
+        isOpen={showThankYouScreen} 
+        onClose={() => setShowThankYouScreen(false)}
+        isCentered
+        size="xl"
+        blockScrollOnMount={true}
+      >
+        <ModalOverlay />
+        <ModalContent textAlign="center" py={10}>
+          <ModalCloseButton />
+          <ModalHeader fontSize="3xl">Thank You for Dining With Us!</ModalHeader>
+          <ModalBody>
+            <VStack spacing={6}>
+              <Spinner size="xl" thickness="4px" speed="0.65s" color="green.500" />
+              <Text fontSize="xl">
+                Please proceed to the register for payment.
+              </Text>
+              <Text color="gray.500">
+                A staff member will assist you shortly.
+              </Text>
+            </VStack>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
       {/* Adjust top padding based on whether orders section is shown */}
       <Box pt={activeOrders.length > 0 ? (isOrdersOpen ? "180px" : "100px") : "65px"}>
         {/* Fixed Top Bar */}
@@ -542,7 +644,7 @@ const CustomerMenu: React.FC = () => {
           borderBottom="1px"
           borderColor={borderColor}
           zIndex={15}
-          px={4}
+          px={2}
           py={3}
           height="65px"
         >
@@ -551,17 +653,29 @@ const CustomerMenu: React.FC = () => {
               <Text fontWeight="bold" fontSize="lg">Table {tableId}</Text>
               <Text fontSize="xs" color={mutedColor}>Scan QR to order</Text>
             </Box>
-            <Button
-              size="lg"
-              colorScheme="blue"
-              variant="outline"
-              onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-              leftIcon={<HamburgerIcon />}
-              height="50px"
-              fontSize="lg"
-            >
-              Order History
-            </Button>
+            <HStack spacing={0}>
+              <Button
+                colorScheme="blue"
+                variant="outline"
+                onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                height="45px"
+                fontSize="md"
+                width="90px"
+                borderRightRadius="0"
+              >
+                History
+              </Button>
+              <Button
+                colorScheme="green"
+                onClick={handlePayButtonClick}
+                height="45px"
+                fontSize="md"
+                width="90px"
+                borderLeftRadius="0"
+              >
+                Pay
+              </Button>
+            </HStack>
           </HStack>
         </Box>
 
@@ -636,7 +750,7 @@ const CustomerMenu: React.FC = () => {
         {/* Adjust main content padding based on whether orders section is shown */}
         <Box pt={activeOrders.length > 0 ? (isOrdersOpen ? "280px" : "200px") : "140px"}>
           {/* Category Description */}
-          <Box px={4}>
+          <Box px={2}>
             {selectedCategoryInfo && (
               <Text color={mutedColor} fontSize="sm" mb={0}>
                 {selectedCategoryInfo.description}
@@ -645,7 +759,7 @@ const CustomerMenu: React.FC = () => {
           </Box>
 
           {/* Menu Items Grid */}
-          <Box px={4}>
+          <Box px={2}>
             <Grid
               templateColumns="repeat(auto-fill, minmax(300px, 1fr))"
               gap={6}
@@ -676,16 +790,16 @@ const CustomerMenu: React.FC = () => {
             borderTop="1px"
             borderColor={borderColor}
             py={3}
-            px={4}
+            px={2}
             zIndex={10}
           >
             <HStack justify="space-between" align="center">
               <Stack spacing={0}>
-                <Text fontSize="xs" color={mutedColor}>
-                  {state.items.length} {state.items.length === 1 ? 'item' : 'items'} in cart
-                </Text>
                 <Text fontSize="lg" fontWeight="bold">
                   {formatPrice(state.total)}
+                </Text>
+                <Text fontSize="xs" color={mutedColor}>
+                  Current Total
                 </Text>
               </Stack>
               <Button
@@ -696,7 +810,7 @@ const CustomerMenu: React.FC = () => {
                 height="50px"
                 px={8}
               >
-                View Cart
+                View Cart ({state.items.length})
               </Button>
             </HStack>
           </Box>

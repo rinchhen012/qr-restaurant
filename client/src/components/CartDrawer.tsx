@@ -14,8 +14,11 @@ import {
   Box,
   IconButton,
   useToast,
+  Flex,
+  Center,
+  Divider,
 } from '@chakra-ui/react';
-import { DeleteIcon } from '@chakra-ui/icons';
+import { DeleteIcon, AddIcon, MinusIcon } from '@chakra-ui/icons';
 import { useCart } from '../context/CartContext';
 import { useSocket } from '../context/SocketContext';
 import axios from 'axios';
@@ -43,6 +46,26 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose, tableId }) => 
       type: 'REMOVE_ITEM',
       payload: { menuItemId },
     });
+  };
+
+  // Add functions to update item quantity
+  const handleIncreaseQuantity = (menuItemId: string, currentQuantity: number) => {
+    dispatch({
+      type: 'UPDATE_QUANTITY',
+      payload: { menuItemId, quantity: currentQuantity + 1 },
+    });
+  };
+
+  const handleDecreaseQuantity = (menuItemId: string, currentQuantity: number) => {
+    if (currentQuantity > 1) {
+      dispatch({
+        type: 'UPDATE_QUANTITY',
+        payload: { menuItemId, quantity: currentQuantity - 1 },
+      });
+    } else {
+      // If quantity would be 0, remove the item instead
+      handleRemoveItem(menuItemId);
+    }
   };
 
   const handlePlaceOrder = async () => {
@@ -111,12 +134,9 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose, tableId }) => 
                 borderRadius="lg"
                 p={4}
               >
-                <HStack justify="space-between" align="start">
+                <HStack justify="space-between" align="start" mb={3}>
                   <VStack align="start" spacing={1}>
                     <Text fontWeight="bold">{item.menuItem.name}</Text>
-                    <Text fontSize="sm" color="gray.600">
-                      Quantity: {item.quantity}
-                    </Text>
                     {Object.entries(item.selectedOptions).map(([key, value]) => (
                       <Text key={key} fontSize="sm" color="gray.600">
                         {key}: {value}
@@ -128,20 +148,48 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose, tableId }) => 
                       </Text>
                     )}
                   </VStack>
+                  <Text fontWeight="semibold">
+                    {formatPrice(item.menuItem.price * item.quantity)}
+                  </Text>
+                </HStack>
+                
+                <Divider my={2} />
+                
+                <Flex justify="space-between" align="center">
+                  {/* Quantity Controls */}
                   <HStack>
-                    <Text fontWeight="semibold">
-                      {formatPrice(item.menuItem.price * item.quantity)}
-                    </Text>
                     <IconButton
-                      aria-label="Remove item"
-                      icon={<DeleteIcon />}
-                      variant="ghost"
-                      colorScheme="red"
                       size="sm"
-                      onClick={() => handleRemoveItem(item.menuItem._id)}
+                      colorScheme="red"
+                      variant="outline"
+                      icon={<MinusIcon />}
+                      aria-label="Decrease quantity"
+                      isDisabled={item.quantity <= 1}
+                      onClick={() => handleDecreaseQuantity(item.menuItem._id, item.quantity)}
+                    />
+                    <Center minW="40px">
+                      <Text fontWeight="medium">{item.quantity}</Text>
+                    </Center>
+                    <IconButton
+                      size="sm"
+                      colorScheme="green"
+                      variant="outline"
+                      icon={<AddIcon />}
+                      aria-label="Increase quantity"
+                      onClick={() => handleIncreaseQuantity(item.menuItem._id, item.quantity)}
                     />
                   </HStack>
-                </HStack>
+                  
+                  {/* Delete Button */}
+                  <IconButton
+                    aria-label="Remove item"
+                    icon={<DeleteIcon />}
+                    variant="ghost"
+                    colorScheme="red"
+                    size="sm"
+                    onClick={() => handleRemoveItem(item.menuItem._id)}
+                  />
+                </Flex>
               </Box>
             ))}
 

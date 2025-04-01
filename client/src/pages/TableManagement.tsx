@@ -57,6 +57,7 @@ import {
 } from '@chakra-ui/react';
 import { CheckIcon, CloseIcon, TimeIcon, AddIcon, DeleteIcon, DragHandleIcon, SettingsIcon, InfoIcon } from '@chakra-ui/icons';
 import axios from 'axios';
+import { useSocket } from '../context/SocketContext';
 
 interface TablePosition {
   x: number;
@@ -131,6 +132,10 @@ const TableManagement: React.FC = () => {
   } = useDisclosure();
   const [activeTimers, setActiveTimers] = useState<Record<number, number>>({});
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isTouchDragging, setIsTouchDragging] = useState(false);
+  const touchStartPosRef = useRef<{ x: number; y: number, offsetX: number, offsetY: number } | null>(null);
+  const mouseDragStartOffsetRef = useRef<{ offsetX: number, offsetY: number } | null>(null);
+  const { socket } = useSocket();
 
   const activeTableBg = useColorModeValue('green.100', 'green.900');
   const inactiveTableBg = useColorModeValue('red.100', 'red.900');
@@ -145,6 +150,48 @@ const TableManagement: React.FC = () => {
     const currentTime = new Date().getTime();
     return Math.floor((currentTime - activatedTime) / (1000 * 60));
   }, []);
+
+  // Fetch orders callback
+  const fetchOrders = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/orders`);
+      console.log('Fetched orders:', response.data);
+      setOrders(response.data);
+    } catch (error) {
+      console.error('Failed to fetch orders:', error);
+    }
+  }, []);
+
+  // Fetch tables callback
+  const fetchTables = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/tables`);
+      // If tables don't have positions, assign default ones
+      const tablesWithPositions = response.data.map((table: Table, index: number) => {
+        if (!table.position) {
+          return {
+            ...table,
+            position: { x: 50 + (index % 5) * 120, y: 50 + Math.floor(index / 5) * 120 },
+            shape: table.shape || 'square'
+          };
+        }
+        return {
+          ...table,
+          shape: table.shape || 'square'
+        };
+      });
+      setTables(tablesWithPositions);
+    } catch (error) {
+      console.error('Failed to fetch tables:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch tables',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  }, [toast]);
 
   // Update timers every minute
   useEffect(() => {
@@ -182,50 +229,73 @@ const TableManagement: React.FC = () => {
     setActiveTimers(newTimers);
   }, [tables, calculateActiveDuration]);
 
-  const fetchTables = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/api/tables`);
-      // If tables don't have positions, assign default ones
-      const tablesWithPositions = response.data.map((table: Table, index: number) => {
-        if (!table.position) {
-          return {
-            ...table,
-            position: { x: 50 + (index % 5) * 120, y: 50 + Math.floor(index / 5) * 120 },
-            shape: table.shape || 'square'
-          };
-        }
-        return {
-          ...table,
-          shape: table.shape || 'square'
-        };
-      });
-      setTables(tablesWithPositions);
-    } catch (error) {
-      console.error('Failed to fetch tables:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch tables',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    }
-  };
+  // Add socket listener for table status updates
+  useEffect(() => {
+    if (!socket) return;
 
-  const fetchOrders = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/api/orders`);
-      setOrders(response.data);
-    } catch (error) {
-      console.error('Failed to fetch orders:', error);
-    }
-  };
+    socket.on('table-status-update', (data) => {
+      if (data.type === 'activated' || data.type === 'deactivated') {
+        // Update our local tables state with the new table data
+        setTables(prevTables =>
+          prevTables.map(table =>
+            table.tableNumber === data.tableNumber
+              ? {
+                  ...table,
+                  isActive: data.type === 'activated',
+                  lastActivatedAt: data.type === 'activated' ? new Date().toISOString() : table.lastActivatedAt,
+                  lastDeactivatedAt: data.type === 'deactivated' ? new Date().toISOString() : table.lastDeactivatedAt,
+                }
+              : table
+          )
+        );
+
+        // Refresh orders and tables to get the latest data
+        fetchOrders();
+        fetchTables();
+
+        // Show toast notification
+        toast({
+          title: data.type === 'activated' 
+            ? `Table ${data.tableNumber} activated` 
+            : `Table ${data.tableNumber} deactivated`,
+          description: data.type === 'activated'
+            ? 'Table is now active and ready for customers'
+            : 'Table has been deactivated and reset',
+          status: 'info',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    });
+
+    // Listen for new orders to update the table view with latest totals
+    socket.on('kitchen-update', ({ type, order }) => {
+      if (type === 'new-order') {
+        // Fetch the latest orders and tables to update the current total
+        fetchOrders();
+        fetchTables();
+      }
+    });
+
+    // Listen for order status updates
+    socket.on('order-status-update', ({ orderId, status }) => {
+      // Update orders and tables to refresh the current total
+      fetchOrders();
+      fetchTables();
+    });
+
+    return () => {
+      socket.off('table-status-update');
+      socket.off('kitchen-update');
+      socket.off('order-status-update');
+    };
+  }, [socket, toast, fetchOrders, fetchTables]);
 
   useEffect(() => {
     fetchTables();
     fetchOrders();
     fetchFloorPlans();
-  }, []);
+  }, [fetchTables, fetchOrders]);
 
   const fetchFloorPlans = async () => {
     try {
@@ -275,19 +345,42 @@ const TableManagement: React.FC = () => {
 
   const handleToggleTable = async (tableNumber: number, isActive: boolean) => {
     try {
-      const endpoint = isActive ? 'deactivate' : 'activate';
-      await axios.post(`${API_URL}/api/tables/${tableNumber}/${endpoint}`);
-      fetchTables();
-      toast({
-        title: `Table ${tableNumber} ${isActive ? 'deactivated' : 'activated'}`,
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error: any) {
+      const endpoint = isActive ? 'activate' : 'deactivate';
+      const response = await axios.post(`${API_URL}/api/tables/${tableNumber}/${endpoint}`);
+      
+      if (response.data) {
+        setTables(prevTables =>
+          prevTables.map(table =>
+            table.tableNumber === tableNumber
+              ? {
+                  ...table,
+                  isActive: isActive,
+                  lastActivatedAt: isActive ? new Date().toISOString() : table.lastActivatedAt,
+                  lastDeactivatedAt: !isActive ? new Date().toISOString() : table.lastDeactivatedAt,
+                  currentOrderId: isActive ? table.currentOrderId : undefined, // Clear order reference when deactivating
+                }
+              : table
+          )
+        );
+
+        // Emit socket event for real-time updates
+        if (socket) {
+          socket.emit(isActive ? 'table-activated' : 'table-deactivated', response.data);
+        }
+
+        // Toast notifications removed
+      }
+    } catch (error) {
+      console.error(`Error ${isActive ? 'activating' : 'deactivating'} table:`, error);
+      let errorMessage = `Failed to ${isActive ? 'activate' : 'deactivate'} table`;
+      if (axios.isAxiosError(error) && error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
       toast({
         title: 'Error',
-        description: error.response?.data?.message || 'Failed to update table status',
+        description: errorMessage,
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -297,26 +390,43 @@ const TableManagement: React.FC = () => {
 
   const handleMarkAsPaid = async (orderId: string) => {
     try {
-      console.log('Marking order as paid:', orderId);
       const response = await axios.put(`${API_URL}/api/orders/${orderId}/payment-status`, {
         paymentStatus: 'paid'
       });
-      console.log('Mark as paid response:', response.data);
-      
-      // Refresh orders list
-      await fetchOrders();
-      
-      toast({
-        title: 'Order marked as paid',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error: any) {
-      console.error('Failed to mark order as paid:', error);
+
+      if (response.data) {
+        // Update orders in state
+        setOrders(prevOrders =>
+          prevOrders.map(order =>
+            order._id === orderId
+              ? { ...order, paymentStatus: 'paid' }
+              : order
+          )
+        );
+
+        // Refresh orders and tables to ensure everything is up to date
+        fetchOrders();
+        fetchTables();
+
+        toast({
+          title: 'Payment Status Updated',
+          description: 'Order marked as paid',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      let errorMessage = 'Failed to update payment status';
+      if (axios.isAxiosError(error) && error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
       toast({
         title: 'Error',
-        description: error.response?.data?.message || 'Failed to update payment status',
+        description: errorMessage,
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -484,7 +594,7 @@ const TableManagement: React.FC = () => {
   };
 
   const getTableOrder = (tableNumber: number) => {
-    // First try to find in-progress orders
+    // First try to find in-progress or pending orders
     const activeOrder = orders.find(order => 
       order.tableNumber === tableNumber && 
       (order.status === 'pending' || order.status === 'in-progress')
@@ -492,14 +602,18 @@ const TableManagement: React.FC = () => {
     
     if (activeOrder) return activeOrder;
     
-    // If no active order but table is active, find the most recent completed order
+    // Do not return completed orders from previous sessions
+    // Only return completed orders if they happened AFTER the table was last activated
     const table = tables.find(t => t.tableNumber === tableNumber);
     
-    if (table?.isActive) {
-      // Find all completed orders for this table
+    if (table?.isActive && table.lastActivatedAt) {
+      const lastActivatedTime = new Date(table.lastActivatedAt).getTime();
+      
+      // Find all completed orders for this table that were created AFTER the table was activated
       const completedOrders = orders.filter(order => 
         order.tableNumber === tableNumber && 
-        order.status === 'completed'
+        order.status === 'completed' &&
+        new Date(order.createdAt).getTime() > lastActivatedTime
       );
       
       // Sort by creation date (most recent first)
@@ -507,7 +621,7 @@ const TableManagement: React.FC = () => {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       
-      // Return the most recent completed order
+      // Return the most recent completed order from the current session
       return sortedOrders[0];
     }
     
@@ -526,33 +640,53 @@ const TableManagement: React.FC = () => {
     if (!isEditMode) return;
     setDraggedTable(tableId);
     
-    // Store the table data for the preview
     const table = tables.find(t => t._id === tableId);
     if (table) {
       setDraggedTableData(table);
     }
     
-    // Set a ghost image for drag (optional)
-    if (e.dataTransfer.setDragImage) {
-      const dragGhost = document.createElement('div');
-      dragGhost.classList.add('drag-ghost');
-      dragGhost.innerHTML = `Table`;
-      document.body.appendChild(dragGhost);
-      e.dataTransfer.setDragImage(dragGhost, 0, 0);
-      setTimeout(() => {
-        document.body.removeChild(dragGhost);
-      }, 0);
+    // Calculate offset and STORE it for mouse drag
+    const targetElement = e.currentTarget as HTMLElement;
+    const rect = targetElement.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    mouseDragStartOffsetRef.current = { offsetX, offsetY }; // Store the offset
+
+    // Create a simple drag ghost element
+    const dragGhost = document.createElement('div');
+    dragGhost.style.position = 'absolute';
+    dragGhost.style.top = '-1000px'; // Position off-screen
+    dragGhost.style.padding = '5px 10px';
+    dragGhost.style.background = 'rgba(173, 216, 230, 0.8)'; // Light blue with some transparency
+    dragGhost.style.border = '1px solid blue';
+    dragGhost.style.borderRadius = '4px';
+    dragGhost.style.fontSize = '14px';
+    dragGhost.style.fontWeight = 'bold';
+    dragGhost.innerText = `Table ${table?.tableNumber || ''}`;
+    document.body.appendChild(dragGhost);
+
+    // Set the drag image using the ghost and the calculated offset
+    if (e.dataTransfer) { // Check if dataTransfer exists
+      e.dataTransfer.effectAllowed = 'move'; // Optional: Indicate the type of operation
+      e.dataTransfer.setDragImage(dragGhost, offsetX, offsetY);
     }
+
+    // Remove the ghost element after a short delay
+    setTimeout(() => {
+      if (document.body.contains(dragGhost)) {
+        document.body.removeChild(dragGhost);
+      }
+    }, 100);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
-    if (!isEditMode || !floorPlanRef.current || !draggedTable) return;
+    if (!isEditMode || !floorPlanRef.current || !draggedTable || !mouseDragStartOffsetRef.current) return; // Check offset ref
     e.preventDefault();
     
-    // Calculate position relative to the floor plan
+    // Calculate position relative to the floor plan, ADJUSTING for mouse offset
     const floorPlanRect = floorPlanRef.current.getBoundingClientRect();
-    const rawX = e.clientX - floorPlanRect.left;
-    const rawY = e.clientY - floorPlanRect.top;
+    const rawX = e.clientX - floorPlanRect.left - mouseDragStartOffsetRef.current.offsetX;
+    const rawY = e.clientY - floorPlanRect.top - mouseDragStartOffsetRef.current.offsetY;
     
     // Apply snapping for the preview
     const snappedPosition = findClosestAlignment({ x: rawX, y: rawY }, draggedTable);
@@ -560,18 +694,22 @@ const TableManagement: React.FC = () => {
   };
 
   const handleDragEnd = () => {
+    // Clear state including the mouse offset ref
+    setDraggedTable(null);
     setDragPosition(null);
     setDraggedTableData(null);
+    mouseDragStartOffsetRef.current = null; // Clear mouse offset
+    // Touch state cleared in handleTouchEnd
   };
 
   const handleDrop = (e: React.DragEvent) => {
-    if (!isEditMode || !draggedTable || !floorPlanRef.current) return;
+    if (!isEditMode || !draggedTable || !floorPlanRef.current || !mouseDragStartOffsetRef.current) return; // Check offset ref
     e.preventDefault();
     
-    // Calculate position relative to the floor plan
+    // Calculate position relative to the floor plan, ADJUSTING for mouse offset
     const floorPlanRect = floorPlanRef.current.getBoundingClientRect();
-    const rawX = e.clientX - floorPlanRect.left;
-    const rawY = e.clientY - floorPlanRect.top;
+    const rawX = e.clientX - floorPlanRect.left - mouseDragStartOffsetRef.current.offsetX;
+    const rawY = e.clientY - floorPlanRect.top - mouseDragStartOffsetRef.current.offsetY;
     
     // Apply snapping
     const { x, y } = findClosestAlignment({ x: rawX, y: rawY }, draggedTable);
@@ -582,19 +720,16 @@ const TableManagement: React.FC = () => {
         ? { ...table, position: { x, y } } 
         : table
     );
-    
     setTables(updatedTables);
     
     // Save to backend
-    const tableToUpdate = updatedTables.find(t => t._id === draggedTable);
-    if (tableToUpdate) {
-      saveTablePosition(draggedTable, tableToUpdate.position);
-    }
+    saveTablePosition(draggedTable, { x, y });
     
     // Clear drag state
     setDraggedTable(null);
     setDragPosition(null);
     setDraggedTableData(null);
+    mouseDragStartOffsetRef.current = null; // Clear mouse offset
   };
 
   const saveTablePosition = async (tableId: string, position: TablePosition) => {
@@ -649,18 +784,21 @@ const TableManagement: React.FC = () => {
 
   const handleTableClick = (table: Table) => {
     if (!isEditMode) {
-      // Set the selected table and open the confirmation dialog
-      setTableToToggle(table);
-      onStatusChangeOpen();
+      // Get the current order for this table
+      const currentOrder = getTableOrder(table.tableNumber);
+      const hasPendingOrder = currentOrder?.paymentStatus === 'pending' && currentOrder?.status !== 'completed';
+      
+      // If active with pending order, we still need the dialog to handle payment options
+      if (table.isActive && hasPendingOrder) {
+        setTableToToggle(table);
+        onStatusChangeOpen();
+      } else {
+        // For all other cases (activating or deactivating without pending payment),
+        // directly toggle the table without showing the alert
+        handleToggleTable(table.tableNumber, !table.isActive);
+      }
     } else {
       handleEditTable(table);
-    }
-  };
-
-  const confirmToggleTable = () => {
-    if (tableToToggle) {
-      handleToggleTable(tableToToggle.tableNumber, tableToToggle.isActive);
-      onStatusChangeClose();
     }
   };
 
@@ -695,6 +833,96 @@ const TableManagement: React.FC = () => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, tableId: string) => {
+    if (!isEditMode) return;
+
+    const tableElement = e.currentTarget as HTMLElement;
+    const tableRect = tableElement.getBoundingClientRect();
+    const touch = e.touches[0];
+
+    // Calculate offset within the table element
+    const offsetX = touch.clientX - tableRect.left;
+    const offsetY = touch.clientY - tableRect.top;
+    
+    // Set drag state directly for touch
+    setDraggedTable(tableId);
+    const table = tables.find(t => t._id === tableId);
+    if (table) {
+      setDraggedTableData(table);
+    }
+
+    // Record touch start position AND offset
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY, offsetX, offsetY };
+    
+    // Set dragging flag
+    setIsTouchDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isEditMode || !draggedTable || !floorPlanRef.current || !isTouchDragging || !touchStartPosRef.current) return;
+
+    const touch = e.touches[0];
+    const floorPlanRect = floorPlanRef.current.getBoundingClientRect();
+    
+    // Calculate position relative to the floor plan, ADJUSTING for the initial touch offset
+    const rawX = touch.clientX - floorPlanRect.left - touchStartPosRef.current.offsetX;
+    const rawY = touch.clientY - floorPlanRect.top - touchStartPosRef.current.offsetY;
+    
+    // Apply snapping for the preview (similar to handleDragOver)
+    const snappedPosition = findClosestAlignment({ x: rawX, y: rawY }, draggedTable);
+    setDragPosition(snappedPosition);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!isEditMode || !draggedTable || !isTouchDragging) return;
+
+    // Use the last known drag position for the drop (already offset)
+    if (dragPosition) {
+      // Update the table position
+      const updatedTables = tables.map(table => 
+        table._id === draggedTable 
+          ? { ...table, position: dragPosition } 
+          : table
+      );
+      setTables(updatedTables);
+      
+      // Save to backend
+      saveTablePosition(draggedTable, dragPosition);
+    }
+    
+    // Clear drag state (similar to handleDrop/handleDragEnd)
+    setDraggedTable(null);
+    setDragPosition(null);
+    setDraggedTableData(null);
+    setIsTouchDragging(false);
+    touchStartPosRef.current = null;
+  };
+
+  // Kept for handling dialogs that are still shown for tables with pending payments
+  const confirmToggleTable = () => {
+    if (tableToToggle) {
+      // This now only handles the simple activate/deactivate cases
+      handleToggleTable(tableToToggle.tableNumber, !tableToToggle.isActive); // Toggle the current state
+      onStatusChangeClose();
+    }
+  };
+
+  // New function to handle marking paid AND deactivating
+  const handleMarkPaidAndDeactivate = async () => {
+    if (tableToToggle) {
+      const currentOrder = getTableOrder(tableToToggle.tableNumber);
+      if (currentOrder && currentOrder.paymentStatus === 'pending') {
+        // Mark as paid first
+        await handleMarkAsPaid(currentOrder._id);
+        // Then deactivate the table
+        await handleToggleTable(tableToToggle.tableNumber, false);
+        // Refresh orders data to reflect changes
+        await fetchOrders();
+      }
+      onStatusChangeClose();
+    }
   };
 
   return (
@@ -807,6 +1035,9 @@ const TableManagement: React.FC = () => {
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           onDragEnd={handleDragEnd}
+          sx={{
+            touchAction: isEditMode ? 'none' : 'auto',
+          }}
           backgroundImage={showGrid && isEditMode ? `linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px), 
                             linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px)` : "none"}
           backgroundSize={`${GRID_SIZE}px ${GRID_SIZE}px`}
@@ -817,8 +1048,8 @@ const TableManagement: React.FC = () => {
               position="absolute"
               left={`${dragPosition.x}px`}
               top={`${dragPosition.y}px`}
-              w={draggedTableData.shape === 'rectangle' ? '160px' : '120px'}
-              h={draggedTableData.shape === 'rectangle' ? '100px' : '120px'}
+              w={draggedTableData.shape === 'rectangle' ? '180px' : '140px'}
+              h={draggedTableData.shape === 'rectangle' ? '120px' : '140px'}
               bg="blue.100"
               border="2px dashed"
               borderColor="blue.500"
@@ -877,8 +1108,8 @@ const TableManagement: React.FC = () => {
                 position="absolute"
                 left={`${table.position.x}px`}
                 top={`${table.position.y}px`}
-                w={table.shape === 'rectangle' ? '160px' : '120px'}
-                h={table.shape === 'rectangle' ? '100px' : '120px'}
+                w={table.shape === 'rectangle' ? '180px' : '140px'}
+                h={table.shape === 'rectangle' ? '120px' : '140px'}
                 bg={table.isActive ? activeTableBg : inactiveTableBg}
                 border="2px solid"
                 borderColor={table.isActive ? activeBorder : inactiveBorder}
@@ -890,6 +1121,12 @@ const TableManagement: React.FC = () => {
                 cursor={isEditMode ? 'move' : 'pointer'}
                 draggable={isEditMode}
                 onDragStart={(e) => handleDragStart(e, table._id)}
+                onTouchStart={(e) => handleTouchStart(e, table._id)}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                sx={{
+                  touchAction: isEditMode ? 'none' : 'auto'
+                }}
                 boxShadow="md"
                 zIndex={draggedTable === table._id ? 0 : 1}
                 opacity={draggedTable === table._id ? 0.5 : 1}
@@ -897,33 +1134,33 @@ const TableManagement: React.FC = () => {
                 _hover={{ boxShadow: "lg", transform: "scale(1.02)" }}
                 transition="all 0.2s"
                 px={2}
-                py={2}
+                pt={4}
+                pb={2}
               >
-                <Text fontWeight="bold" color={tableTextColor}>Table {table.tableNumber}</Text>
+                <Text fontWeight="bold" fontSize="lg" color={tableTextColor}>Table {table.tableNumber}</Text>
                 
-                {/* Payment status badge in top right corner */}
-                {!isEditMode && currentOrder && (
+                {!isEditMode && currentOrder && currentOrder.paymentStatus === 'pending' && (
                   <Badge 
                     position="absolute"
-                    top="-8px"
-                    right="-8px"
-                    colorScheme={currentOrder.paymentStatus === 'paid' ? 'green' : 'orange'} 
-                    fontSize="xs"
+                    top="-12px"
+                    right="-10px"
+                    colorScheme="orange" 
+                    fontSize="sm"
                     px={2}
                     py={1}
                     borderRadius="full"
                     boxShadow="sm"
                   >
-                    {currentOrder.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
+                    Unpaid
                   </Badge>
                 )}
                 
                 {!isEditMode && (
-                  <VStack spacing={0} mt={1}>
+                  <VStack spacing={1} mt={1}>
                     <HStack spacing={1}>
                       <Badge
                         colorScheme={table.isActive ? 'green' : 'red'}
-                        fontSize="2xs"
+                        fontSize="xs"
                         px={1}
                       >
                         {table.isActive ? 'Active' : 'Inactive'}
@@ -932,37 +1169,19 @@ const TableManagement: React.FC = () => {
                     
                     {table.isActive && (
                       <>
-                        <Text fontSize="9px" fontWeight="medium" mt={0} lineHeight="1">
+                        <Text fontSize="xs" fontWeight="medium" mt={0} lineHeight="1.2">
                           {table.lastActivatedAt ? formatTime(table.lastActivatedAt) : 'Just now'}
                         </Text>
 
-                        {/* Timer Display */}
-                        <Badge colorScheme="purple" fontSize="2xs" px={1} mt={1}>
-                          <TimeIcon mr={1} fontSize="8px" />
+                        <Badge colorScheme="purple" fontSize="xs" px={1} mt={1}>
+                          <TimeIcon mr={1} fontSize="9px" />
                           {formatDuration(activeTimers[table.tableNumber] || 0)}
                         </Badge>
                         
                         {currentOrder && (
-                          <Text fontSize="9px" color={tableTextColor} fontWeight="bold" mt={1}>
+                          <Text fontSize="xs" color={tableTextColor} fontWeight="bold" mt={1}>
                             {countOrderItems(currentOrder)} items | ¥{currentOrder.totalAmount.toLocaleString('ja-JP')}
                           </Text>
-                        )}
-                        
-                        {currentOrder && currentOrder.paymentStatus === 'pending' && currentOrder.status !== 'completed' && (
-                          <Button 
-                            size="xs" 
-                            colorScheme="green" 
-                            leftIcon={<CheckIcon fontSize="8px" />}
-                            height="16px"
-                            fontSize="8px"
-                            mt={1}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMarkAsPaid(currentOrder._id);
-                            }}
-                          >
-                            Mark Paid
-                          </Button>
                         )}
                       </>
                     )}
@@ -990,112 +1209,6 @@ const TableManagement: React.FC = () => {
           })}
         </Box>
 
-        {/* Table List Section (only shown when not in edit mode) */}
-        {!isEditMode && (
-          <>
-            <Heading size="md" mt={4}>Table Details</Heading>
-            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-              {tables.map((table) => {
-                const currentOrder = getTableOrder(table.tableNumber);
-                return (
-                  <Box
-                    key={table._id}
-                    p={6}
-                    rounded="lg"
-                    shadow="sm"
-                    borderWidth="2px"
-                    borderColor={table.isActive ? activeBorder : inactiveBorder}
-                    bg={table.isActive ? "green.50" : "red.50"}
-                  >
-                    <VStack spacing={4} align="stretch">
-                      <HStack justify="space-between">
-                        <Heading size="md">Table {table.tableNumber}</Heading>
-                        <HStack>
-                          <Badge
-                            colorScheme={table.isActive ? 'green' : 'red'}
-                            fontSize="sm"
-                          >
-                            {table.isActive ? 'Active' : 'Inactive'}
-                          </Badge>
-                          {currentOrder && (
-                            <Badge 
-                              colorScheme={currentOrder.paymentStatus === 'paid' ? 'green' : 'orange'} 
-                              fontSize="sm"
-                            >
-                              {currentOrder.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
-                            </Badge>
-                          )}
-                        </HStack>
-                      </HStack>
-
-                      {table.isActive && (
-                        <HStack>
-                          <Badge colorScheme="purple" px={2} py={1}>
-                            <TimeIcon mr={1} />
-                            Active for {formatDuration(activeTimers[table.tableNumber] || 0)}
-                          </Badge>
-                        </HStack>
-                      )}
-
-                      {currentOrder && (
-                        <Box p={3} bg="gray.50" rounded="md">
-                          <Text fontSize="sm" fontWeight="bold" mb={2}>
-                            Current Order
-                          </Text>
-                          <VStack align="stretch" spacing={2}>
-                            <HStack justify="space-between">
-                              <Text fontSize="sm">Total Amount:</Text>
-                              <Text fontSize="sm" fontWeight="bold">
-                                ¥{currentOrder.totalAmount.toLocaleString('ja-JP')}
-                              </Text>
-                            </HStack>
-                            <Button
-                              size="sm"
-                              colorScheme="green"
-                              leftIcon={<CheckIcon />}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMarkAsPaid(currentOrder._id);
-                              }}
-                              isDisabled={currentOrder.paymentStatus === 'paid' || currentOrder.status === 'completed'}
-                            >
-                              {currentOrder.paymentStatus === 'paid' ? 'Paid' : 'Mark as Paid'}
-                            </Button>
-                          </VStack>
-                        </Box>
-                      )}
-
-                      <HStack justify="space-between">
-                        <Text fontSize="sm" color="gray.500">
-                          Last {table.isActive ? 'activated' : 'deactivated'}:{' '}
-                          {table.isActive
-                            ? new Date(table.lastActivatedAt!).toLocaleString('ja-JP')
-                            : table.lastDeactivatedAt
-                            ? new Date(table.lastDeactivatedAt).toLocaleString('ja-JP')
-                            : 'Never'}
-                        </Text>
-                        <Tooltip label={table.isActive ? 'Deactivate table' : 'Activate table'}>
-                          <IconButton
-                            aria-label={table.isActive ? 'Deactivate table' : 'Activate table'}
-                            icon={table.isActive ? <CloseIcon /> : <CheckIcon />}
-                            colorScheme={table.isActive ? 'red' : 'green'}
-                            onClick={() => handleTableClick(table)}
-                            isDisabled={
-                              table.isActive && 
-                              currentOrder !== undefined && 
-                              currentOrder.paymentStatus === 'pending' && 
-                              currentOrder.status !== 'completed'
-                            }
-                          />
-                        </Tooltip>
-                      </HStack>
-                    </VStack>
-                  </Box>
-                );
-              })}
-            </SimpleGrid>
-          </>
-        )}
       </VStack>
 
       {/* Add Tables Modal */}
@@ -1202,40 +1315,98 @@ const TableManagement: React.FC = () => {
       >
         <AlertDialogOverlay>
           <AlertDialogContent>
-            <AlertDialogHeader fontSize="lg" fontWeight="bold">
-              {tableToToggle?.isActive ? 'Deactivate' : 'Activate'} Table {tableToToggle?.tableNumber}
-            </AlertDialogHeader>
+            {(() => {
+              // Determine the state of the table and its order
+              const isActive = tableToToggle?.isActive;
+              const currentOrder = tableToToggle ? getTableOrder(tableToToggle.tableNumber) : undefined;
+              const hasPendingOrder = currentOrder?.paymentStatus === 'pending' && currentOrder?.status !== 'completed';
 
-            <AlertDialogBody>
-              Are you sure you want to {tableToToggle?.isActive ? 'deactivate' : 'activate'} this table?
-              {tableToToggle?.isActive && 
-                getTableOrder(tableToToggle.tableNumber) && 
-                getTableOrder(tableToToggle.tableNumber)?.paymentStatus === 'pending' && 
-                getTableOrder(tableToToggle.tableNumber)?.status !== 'completed' && (
-                <Text color="red.500" mt={2}>
-                  Note: This table has a pending order. Mark the order as paid before deactivating.
-                </Text>
-              )}
-            </AlertDialogBody>
-
-            <AlertDialogFooter>
-              <Button ref={cancelRef} onClick={onStatusChangeClose}>
-                Cancel
-              </Button>
-              <Button 
-                colorScheme={tableToToggle?.isActive ? 'red' : 'green'} 
-                onClick={confirmToggleTable} 
-                ml={3}
-                isDisabled={
-                  tableToToggle?.isActive && 
-                  getTableOrder(tableToToggle.tableNumber) !== undefined && 
-                  getTableOrder(tableToToggle.tableNumber)?.paymentStatus === 'pending' &&
-                  getTableOrder(tableToToggle.tableNumber)?.status !== 'completed'
-                }
-              >
-                {tableToToggle?.isActive ? 'Deactivate' : 'Activate'}
-              </Button>
-            </AlertDialogFooter>
+              if (isActive && hasPendingOrder) {
+                // Case 1: Active table with a pending order
+                return (
+                  <>
+                    <AlertDialogHeader fontSize="lg" fontWeight="bold">
+                      Manage Table {tableToToggle?.tableNumber}
+                    </AlertDialogHeader>
+                    <AlertDialogBody>
+                      This table has an unpaid order. What would you like to do?
+                    </AlertDialogBody>
+                    <AlertDialogFooter>
+                      <Button ref={cancelRef} onClick={onStatusChangeClose}>
+                        Cancel
+                      </Button>
+                      <Button
+                        colorScheme="blue"
+                        onClick={() => {
+                          if (currentOrder) {
+                            handleMarkAsPaid(currentOrder._id);
+                            onStatusChangeClose();
+                          }
+                        }}
+                        ml={3}
+                      >
+                        Mark as Paid
+                      </Button>
+                      <Button
+                        colorScheme="green"
+                        onClick={handleMarkPaidAndDeactivate}
+                        ml={3}
+                      >
+                        Mark Paid & Deactivate
+                      </Button>
+                    </AlertDialogFooter>
+                  </>
+                );
+              } else if (isActive && !hasPendingOrder) {
+                // Case 2: Active table without a pending order (or order is paid/completed)
+                return (
+                  <>
+                    <AlertDialogHeader fontSize="lg" fontWeight="bold">
+                      Deactivate Table {tableToToggle?.tableNumber}
+                    </AlertDialogHeader>
+                    <AlertDialogBody>
+                      Are you sure you want to deactivate this table?
+                    </AlertDialogBody>
+                    <AlertDialogFooter>
+                      <Button ref={cancelRef} onClick={onStatusChangeClose}>
+                        Cancel
+                      </Button>
+                      <Button
+                        colorScheme="red"
+                        onClick={confirmToggleTable}
+                        ml={3}
+                      >
+                        Deactivate
+                      </Button>
+                    </AlertDialogFooter>
+                  </>
+                );
+              } else {
+                // Case 3: Inactive table
+                return (
+                  <>
+                    <AlertDialogHeader fontSize="lg" fontWeight="bold">
+                      Activate Table {tableToToggle?.tableNumber}
+                    </AlertDialogHeader>
+                    <AlertDialogBody>
+                      Are you sure you want to activate this table?
+                    </AlertDialogBody>
+                    <AlertDialogFooter>
+                      <Button ref={cancelRef} onClick={onStatusChangeClose}>
+                        Cancel
+                      </Button>
+                      <Button
+                        colorScheme="green"
+                        onClick={confirmToggleTable}
+                        ml={3}
+                      >
+                        Activate
+                      </Button>
+                    </AlertDialogFooter>
+                  </>
+                );
+              }
+            })()}
           </AlertDialogContent>
         </AlertDialogOverlay>
       </AlertDialog>
